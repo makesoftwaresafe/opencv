@@ -70,7 +70,7 @@ using namespace cv;
 
 static int icvMkDir( const char* filename )
 {
-    char path[PATH_MAX];
+    char path[PATH_MAX+1];
     char* p;
     int pos;
 
@@ -83,7 +83,8 @@ static int icvMkDir( const char* filename )
     mode = 0755;
 #endif /* _WIN32 */
 
-    strcpy( path, filename );
+    path[0] = '\0';
+    strncat( path, filename, PATH_MAX );
 
     p = path;
     for( ; ; )
@@ -765,7 +766,6 @@ CvBackgroundData* icvCreateBackgroundData( const char* filename, Size winsize )
         }
         if( count > 0 )
         {
-            //rewind( input );
             fseek( input, 0, SEEK_SET );
             datasize += sizeof( *data ) + sizeof( char* ) * count;
             data = (CvBackgroundData*) fastMalloc( datasize );
@@ -871,8 +871,6 @@ void icvGetNextFromBackgroundData( CvBackgroundData* data,
 
     reader->src = img;
 
-    //reader->offset.x = round % data->winsize.width;
-    //reader->offset.y = round / data->winsize.width;
     reader->offset = offset;
     reader->point = reader->offset;
     reader->scale = MAX(
@@ -1167,7 +1165,7 @@ void cvCreateTestSamples( const char* infoname,
             }
             else
             {
-                filename++; // character after last / or \
+                filename++; // get basename after last path delimiter
             }
 
             count = MIN( count, cvbgdata->count );

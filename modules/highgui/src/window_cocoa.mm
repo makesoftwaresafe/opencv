@@ -195,6 +195,9 @@ CV_IMPL void cvDestroyWindow( const char* name)
     //cout << "cvDestroyWindow" << endl;
     CVWindow *window = cvGetWindow(name);
     if(window) {
+        if ([window styleMask] & NSFullScreenWindowMask) {
+            [window toggleFullScreen:nil];
+        }
         [window close];
         [windows removeObjectForKey:[NSString stringWithFormat:@"%s", name]];
     }
@@ -659,14 +662,16 @@ CvRect cvGetWindowRect_COCOA( const char* name )
     {
         CV_ERROR( CV_StsNullPtr, "NULL window" );
     } else {
-        NSRect rect = [window frame];
+        @autoreleasepool {
+            NSRect rect = [window frame];
 #if MAC_OS_X_VERSION_MAX_ALLOWED > MAC_OS_X_VERSION_10_6
-        NSPoint pt = [window convertRectToScreen:rect].origin;
+            NSPoint pt = [window convertRectToScreen:rect].origin;
 #else
-        NSPoint pt = [window convertBaseToScreen:rect.origin];
+            NSPoint pt = [window convertBaseToScreen:rect.origin];
 #endif
-        NSSize sz = [[[window contentView] image] size];
-        result = cvRect(pt.x, pt.y, sz.width, sz.height);
+            NSSize sz = [[[window contentView] image] size];
+            result = cvRect(pt.x, pt.y, sz.width, sz.height);
+        }
     }
 
     __END__;
@@ -701,7 +706,11 @@ double cvGetModeWindow_COCOA( const char* name )
 void cvSetModeWindow_COCOA( const char* name, double prop_value )
 {
     CVWindow *window = nil;
+
+#if MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_7
     NSDictionary *fullscreenOptions = nil;
+#endif
+
     NSAutoreleasePool* localpool = nil;
 
     CV_FUNCNAME( "cvSetModeWindow_COCOA" );
@@ -725,6 +734,31 @@ void cvSetModeWindow_COCOA( const char* name, double prop_value )
 
     localpool = [[NSAutoreleasePool alloc] init];
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED > MAC_OS_X_VERSION_10_6
+    if ( ([window styleMask] & NSFullScreenWindowMask) && prop_value==CV_WINDOW_NORMAL )
+    {
+        [window toggleFullScreen:nil];
+
+        window.status=CV_WINDOW_NORMAL;
+    }
+    else if( !([window styleMask] & NSFullScreenWindowMask) && prop_value==CV_WINDOW_FULLSCREEN )
+    {
+        [window setCollectionBehavior:NSWindowCollectionBehaviorFullScreenPrimary];
+
+        NSScreen* screen = [window screen];
+
+        NSRect frame = [screen frame];
+        [window setFrame:frame display:YES];
+
+        [window setContentSize:frame.size];
+
+        [window toggleFullScreen:nil];
+
+        [window setFrameTopLeftPoint: frame.origin];
+
+        window.status=CV_WINDOW_FULLSCREEN;
+    }
+#else
     fullscreenOptions = [NSDictionary dictionaryWithObject:[NSNumber numberWithBool:YES] forKey:NSFullScreenModeSetting];
     if ( [[window contentView] isInFullScreenMode] && prop_value==CV_WINDOW_NORMAL )
     {
@@ -736,7 +770,7 @@ void cvSetModeWindow_COCOA( const char* name, double prop_value )
         [[window contentView] enterFullScreenMode:[NSScreen mainScreen] withOptions:fullscreenOptions];
         window.status=CV_WINDOW_FULLSCREEN;
     }
-
+#endif
     [localpool drain];
 
     __END__;
@@ -810,7 +844,7 @@ void cvSetPropTopmost_COCOA( const char* name, const bool topmost )
         CV_ERROR( CV_StsNullPtr, "NULL window" );
     }
 
-    if ([[window contentView] isInFullScreenMode])
+    if (([window styleMask] & NSFullScreenWindowMask))
     {
         EXIT;
     }
